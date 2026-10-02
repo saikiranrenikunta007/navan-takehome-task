@@ -1,0 +1,50 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: receipts
+      MYSQL_USER: receipts
+      MYSQL_PASSWORD: receipts
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3308:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+
+  app:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/receipts
+      DB_USER: receipts
+      DB_PASSWORD: receipts
+      STORAGE_PROVIDER: local
+      STORAGE_LOCAL_DIR: /data/receipts
+      OTEL_METRICS_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
+    ports:
+      - "8080:8080"
+    volumes:
+      - receipt-files:/data/receipts
+
+volumes:
+  mysql-data:
+  receipt-files:
