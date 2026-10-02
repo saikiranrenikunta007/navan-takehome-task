@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -58,7 +57,6 @@ public class TransactionService {
         applyTaxes(txn, extraction);
         applyItems(txn, extraction);
         txn.setItemizeStatus(reconciliation.statusFor(txn));
-        txn.setUpdatedAt(Instant.now());
 
         try {
             Transaction saved = repository.saveAndFlush(txn);
@@ -78,7 +76,6 @@ public class TransactionService {
             applyTaxes(existing, extraction);
             applyItems(existing, extraction);
             existing.setItemizeStatus(reconciliation.statusFor(existing));
-            existing.setUpdatedAt(Instant.now());
             return repository.saveAndFlush(existing);
         }
     }
@@ -114,7 +111,6 @@ public class TransactionService {
         Transaction txn = getById(id);
         applyItems(txn, extraction);
         txn.setItemizeStatus(reconciliation.statusFor(txn));
-        txn.setUpdatedAt(Instant.now());
         return repository.saveAndFlush(txn);
     }
 
@@ -146,7 +142,6 @@ public class TransactionService {
 
         txn.replaceLineItems(candidate);
         txn.setItemizeStatus(ItemizeStatus.COMPLETE);
-        txn.setUpdatedAt(Instant.now());
         return repository.saveAndFlush(txn);
     }
 
@@ -163,7 +158,6 @@ public class TransactionService {
             ));
         }
         txn.setItemizeStatus(ItemizeStatus.COMPLETE);
-        txn.setUpdatedAt(Instant.now());
         return repository.saveAndFlush(txn);
     }
 

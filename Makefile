@@ -1,4 +1,4 @@
-.PHONY: help build test run up down logs demo clean
+will .PHONY: help setup build test run up down logs demo clean
 
 BASE_URL ?= http://localhost:8080
 FIXTURES := task-a-receipt-autoitemize/fixtures/task-a

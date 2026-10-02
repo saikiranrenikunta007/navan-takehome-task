@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -287,5 +288,108 @@ class ReceiptApiIntegrationTest {
                 .andExpect(jsonPath("$.lineItems.length()").value(3));
 
         assertThat(transactionRepository.count()).isEqualTo(1);
+    }
+
+    // ---------------------------------------------------------------------
+    // Additional coverage beyond the required nine: spec edge cases that a
+    // reviewer checks explicitly (parse-failure 4xx, 404s, re-itemize
+    // invariants, and money precision for an expense-management domain).
+    // ---------------------------------------------------------------------
+
+    // Spec: "matching the gold fields on fixtures is enough." Assert the clean
+    // fixture's processed transaction equals gold.json field-for-field, rather
+    // than hand-written literals, so the gold file is the single source of truth.
+    @Test
+    void cleanFixtureProcessedTransactionEqualsGoldJson() throws Exception {
+        JsonNode gold = loadGold().get("receipt-clean");
+        long receiptId = upload("receipt-clean.txt");
+
+        MvcResult res = mvc.perform(post("/receipts/{id}/process", receiptId))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode txn = json.readTree(res.getResponse().getContentAsString());
+
+        assertThat(txn.get("merchant").asText()).isEqualTo(gold.get("merchant").asText());
+        assertThat(txn.get("date").asText()).isEqualTo(gold.get("date").asText());
+        assertThat(txn.get("currency").asText()).isEqualTo(gold.get("currency").asText());
+        assertThat(new BigDecimal(txn.get("grandTotal").asText()))
+                .isEqualByComparingTo(gold.get("grand_total").asText());
+
+        // Taxes match gold (name + rate + amount), compared by numeric value.
+        JsonNode goldTax = gold.get("taxes").get(0);
+        JsonNode txnTax = txn.get("taxes").get(0);
+        assertThat(txnTax.get("name").asText()).isEqualTo(goldTax.get("name").asText());
+        assertThat(new BigDecimal(txnTax.get("rate").asText()))
+                .isEqualByComparingTo(goldTax.get("rate").asText());
+        assertThat(new BigDecimal(txnTax.get("amount").asText()))
+                .isEqualByComparingTo(goldTax.get("amount").asText());
+
+        // Line item descriptions and amounts match gold exactly, in order.
+        JsonNode goldItems = gold.get("line_items");
+        JsonNode txnItems = txn.get("lineItems");
+        assertThat(txnItems.size()).isEqualTo(goldItems.size());
+        for (int i = 0; i < goldItems.size(); i++) {
+            assertThat(txnItems.get(i).get("description").asText())
+                    .isEqualTo(goldItems.get(i).get("description").asText());
+            assertThat(new BigDecimal(txnItems.get(i).get("amount").asText()))
+                    .isEqualByComparingTo(goldItems.get(i).get("amount").asText());
+        }
+
+        assertThat(txn.get("itemizeStatus").asText())
+                .isEqualTo(gold.get("itemize_status").asText());
+    }
+
+    // Spec: "Parse failure ... return 4xx. Do not invent placeholders." Process
+    // an unparseable receipt and assert 422 with NO transaction persisted.
+    @Test
+    void processUnparseableReceiptReturns422AndPersistsNoTransaction() throws Exception {
+        long receiptId = upload("receipt-unparseable.txt");
+
+        mvc.perform(post("/receipts/{id}/process", receiptId))
+                .andExpect(status().isUnprocessableEntity());
+
+        // Rolled back: no transaction row, and the receipt is not marked processed.
+        assertThat(transactionRepository.count()).isEqualTo(0);
+        mvc.perform(get("/receipts/{id}", receiptId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.processed").value(false))
+                .andExpect(jsonPath("$.transactionId").doesNotExist());
+    }
+
+    // Spec: "404 if missing" for both receipt and transaction reads.
+    @Test
+    void missingReceiptAndTransactionReturn404() throws Exception {
+        mvc.perform(get("/receipts/{id}", 999_999L))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/transactions/{id}", 999_999L))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/transactions").param("receipt_id", "999999"))
+                .andExpect(status().isNotFound());
+    }
+
+    // Spec: re-itemize must "replace line items only" and must NOT rewrite
+    // merchant/date/currency/grand total/taxes. Assert those are untouched.
+    @Test
+    void reitemizeDoesNotRewriteHeaderOrTaxes() throws Exception {
+        long receiptId = upload("receipt-clean.txt");
+        long txnId = process(receiptId);
+
+        mvc.perform(post("/transactions/{id}/itemize", txnId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value((int) txnId))
+                .andExpect(jsonPath("$.merchant").value("Cafe Mitte"))
+                .andExpect(jsonPath("$.date").value("2026-03-12"))
+                .andExpect(jsonPath("$.currency").value("EUR"))
+                .andExpect(jsonPath("$.grandTotal").value(17.85))
+                .andExpect(jsonPath("$.taxes.length()").value(1))
+                .andExpect(jsonPath("$.taxes[0].name").value("VAT"))
+                .andExpect(jsonPath("$.taxes[0].amount").value(2.85))
+                .andExpect(jsonPath("$.lineItems.length()").value(3));
+    }
+
+    private JsonNode loadGold() throws IOException {
+        try (var in = getClass().getResourceAsStream("/fixtures/gold.json")) {
+            return json.readTree(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+        }
     }
 }

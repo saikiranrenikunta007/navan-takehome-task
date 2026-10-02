@@ -11,6 +11,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -59,6 +61,23 @@ public class Transaction {
     @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")
     private List<LineItem> lineItems = new ArrayList<>();
+
+    /**
+     * Timestamps are owned by the entity lifecycle, not by callers. This keeps
+     * created_at/updated_at correct even if a future write path forgets to set
+     * them, and avoids clock drift between separate service methods.
+     */
+    @PrePersist
+    void onCreate() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
 
     public void replaceTaxes(List<Tax> newTaxes) {
         this.taxes.clear();

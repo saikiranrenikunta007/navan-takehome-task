@@ -33,7 +33,7 @@ services:
       otel-collector:
         condition: service_started
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/receipts
+      DB_URL: jdbc:mysql://mysql:3306/receipts?createDatabaseIfNotExist=true
       DB_USER: receipts
       DB_PASSWORD: receipts
       STORAGE_PROVIDER: local
@@ -41,7 +41,7 @@ services:
       OTEL_METRICS_ENABLED: "true"
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
     ports:
-      - "8082:8080"
+      - "8080:8080"
     volumes:
       - receipt-files:/data/receipts
 

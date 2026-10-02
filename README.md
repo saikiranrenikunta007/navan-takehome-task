@@ -23,6 +23,53 @@ the stored bytes as UTF-8. Swapping in a real vendor means replacing that one
 class. Extraction (`ReceiptParser`) matches the `gold.json` fields on the three
 fixtures.
 
+## Prerequisites
+
+You need **Docker** (to run the service) and, only if you want to run the tests
+or the app outside Docker, **Java 21**. The Maven wrapper (`./mvnw`) is bundled,
+so Maven itself is not required. `make` is optional - every `make` target shows
+the raw command it runs, so you can run that command directly if `make` is
+absent.
+
+Minimum to run everything in this README: Docker, plus Java 21 for `./mvnw test`.
+
+**macOS (Homebrew):**
+
+```bash
+# One-shot: installs Java 21 and Docker (requires Homebrew: https://brew.sh)
+make setup
+# Equivalent without make:
+brew install openjdk@21
+brew install --cask docker
+```
+
+**Ubuntu / Debian (apt):**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y openjdk-21-jdk make
+# Docker Engine + Compose plugin:
+sudo apt-get install -y docker.io docker-compose-plugin
+sudo systemctl enable --now docker
+```
+
+**Fedora / RHEL (dnf):**
+
+```bash
+sudo dnf install -y java-21-openjdk make docker docker-compose-plugin
+sudo systemctl enable --now docker
+```
+
+Verify the toolchain before running:
+
+```bash
+docker --version          # Docker present
+docker compose version    # Compose v2 plugin present
+java -version             # should report 21 (only needed for the non-Docker path)
+```
+
+Start Docker Desktop (macOS) or the Docker daemon (Linux) before `make up`.
+
 ## Run the API (one command)
 
 Starts MySQL, the OTel collector, and the app:
@@ -31,13 +78,19 @@ Starts MySQL, the OTel collector, and the app:
 make up        # docker compose up --build -d
 ```
 
+If you do not have `make`, run the underlying command directly:
+
+```bash
+docker compose up --build -d
+```
+
 The API is then on `http://localhost:8080`. Swagger UI:
 `http://localhost:8080/swagger-ui.html`.
 
 Stop everything:
 
 ```bash
-make down
+make down      # or: docker compose down
 ```
 
 To run the app directly against a local MySQL instead of in Docker, start the
@@ -143,6 +196,9 @@ curl $BASE/actuator/metrics
 ```
 
 ## Using Flocii (S3 multipart) instead of local storage
+
+Local filesystem storage is the default, so no configuration is needed to run or
+test the service. Set the provider to `s3` only when you want to use Flocii.
 
 Set the storage provider to `s3` and provide credentials via environment
 variables (never commit them):
