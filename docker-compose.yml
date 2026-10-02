@@ -41,7 +41,7 @@ services:
       OTEL_METRICS_ENABLED: "true"
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
     ports:
-      - "8080:8080"
+      - "8082:8080"
     volumes:
       - receipt-files:/data/receipts
 
